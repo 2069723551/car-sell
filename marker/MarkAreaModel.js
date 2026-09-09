@@ -41,33 +41,45 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import parallelPreprocessor from '../../coord/parallel/parallelPreprocessor.js';
-import ParallelView from './ParallelView.js';
-import ParallelModel from '../../coord/parallel/ParallelModel.js';
-import parallelCoordSysCreator from '../../coord/parallel/parallelCreator.js';
-import axisModelCreator from '../../coord/axisModelCreator.js';
-import ParallelAxisModel from '../../coord/parallel/AxisModel.js';
-import ParallelAxisView from '../axis/ParallelAxisView.js';
-import { installParallelActions } from '../axis/parallelAxisAction.js';
-var defaultAxisOption = {
-  type: 'value',
-  areaSelectStyle: {
-    width: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(160,197,232)',
-    color: 'rgba(160,197,232)',
-    opacity: 0.3
-  },
-  realtime: true,
-  z: 10
-};
-export function install(registers) {
-  registers.registerComponentView(ParallelView);
-  registers.registerComponentModel(ParallelModel);
-  registers.registerCoordinateSystem('parallel', parallelCoordSysCreator);
-  registers.registerPreprocessor(parallelPreprocessor);
-  registers.registerComponentModel(ParallelAxisModel);
-  registers.registerComponentView(ParallelAxisView);
-  axisModelCreator(registers, 'parallel', ParallelAxisModel, defaultAxisOption);
-  installParallelActions(registers);
-}
+import { __extends } from "tslib";
+import MarkerModel from './MarkerModel.js';
+var MarkAreaModel = /** @class */function (_super) {
+  __extends(MarkAreaModel, _super);
+  function MarkAreaModel() {
+    var _this = _super !== null && _super.apply(this, arguments) || this;
+    _this.type = MarkAreaModel.type;
+    return _this;
+  }
+  MarkAreaModel.prototype.createMarkerModelFromSeries = function (markerOpt, masterMarkerModel, ecModel) {
+    return new MarkAreaModel(markerOpt, masterMarkerModel, ecModel);
+  };
+  MarkAreaModel.type = 'markArea';
+  MarkAreaModel.defaultOption = {
+    // zlevel: 0,
+    // PENDING
+    z: 1,
+    tooltip: {
+      trigger: 'item'
+    },
+    // markArea should fixed on the coordinate system
+    animation: false,
+    label: {
+      show: true,
+      position: 'top'
+    },
+    itemStyle: {
+      // color and borderColor default to use color from series
+      // color: 'auto'
+      // borderColor: 'auto'
+      borderWidth: 0
+    },
+    emphasis: {
+      label: {
+        show: true,
+        position: 'top'
+      }
+    }
+  };
+  return MarkAreaModel;
+}(MarkerModel);
+export default MarkAreaModel;

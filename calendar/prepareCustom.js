@@ -41,33 +41,29 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import parallelPreprocessor from '../../coord/parallel/parallelPreprocessor.js';
-import ParallelView from './ParallelView.js';
-import ParallelModel from '../../coord/parallel/ParallelModel.js';
-import parallelCoordSysCreator from '../../coord/parallel/parallelCreator.js';
-import axisModelCreator from '../../coord/axisModelCreator.js';
-import ParallelAxisModel from '../../coord/parallel/AxisModel.js';
-import ParallelAxisView from '../axis/ParallelAxisView.js';
-import { installParallelActions } from '../axis/parallelAxisAction.js';
-var defaultAxisOption = {
-  type: 'value',
-  areaSelectStyle: {
-    width: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(160,197,232)',
-    color: 'rgba(160,197,232)',
-    opacity: 0.3
-  },
-  realtime: true,
-  z: 10
-};
-export function install(registers) {
-  registers.registerComponentView(ParallelView);
-  registers.registerComponentModel(ParallelModel);
-  registers.registerCoordinateSystem('parallel', parallelCoordSysCreator);
-  registers.registerPreprocessor(parallelPreprocessor);
-  registers.registerComponentModel(ParallelAxisModel);
-  registers.registerComponentView(ParallelAxisView);
-  axisModelCreator(registers, 'parallel', ParallelAxisModel, defaultAxisOption);
-  installParallelActions(registers);
+export default function calendarPrepareCustom(coordSys) {
+  var rect = coordSys.getRect();
+  var rangeInfo = coordSys.getRangeInfo();
+  return {
+    coordSys: {
+      type: 'calendar',
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      cellWidth: coordSys.getCellWidth(),
+      cellHeight: coordSys.getCellHeight(),
+      rangeInfo: {
+        start: rangeInfo.start,
+        end: rangeInfo.end,
+        weeks: rangeInfo.weeks,
+        dayCount: rangeInfo.allDay
+      }
+    },
+    api: {
+      coord: function (data, clamp) {
+        return coordSys.dataToPoint(data, clamp);
+      }
+    }
+  };
 }

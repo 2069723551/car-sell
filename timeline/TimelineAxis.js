@@ -41,33 +41,31 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import parallelPreprocessor from '../../coord/parallel/parallelPreprocessor.js';
-import ParallelView from './ParallelView.js';
-import ParallelModel from '../../coord/parallel/ParallelModel.js';
-import parallelCoordSysCreator from '../../coord/parallel/parallelCreator.js';
-import axisModelCreator from '../../coord/axisModelCreator.js';
-import ParallelAxisModel from '../../coord/parallel/AxisModel.js';
-import ParallelAxisView from '../axis/ParallelAxisView.js';
-import { installParallelActions } from '../axis/parallelAxisAction.js';
-var defaultAxisOption = {
-  type: 'value',
-  areaSelectStyle: {
-    width: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(160,197,232)',
-    color: 'rgba(160,197,232)',
-    opacity: 0.3
-  },
-  realtime: true,
-  z: 10
-};
-export function install(registers) {
-  registers.registerComponentView(ParallelView);
-  registers.registerComponentModel(ParallelModel);
-  registers.registerCoordinateSystem('parallel', parallelCoordSysCreator);
-  registers.registerPreprocessor(parallelPreprocessor);
-  registers.registerComponentModel(ParallelAxisModel);
-  registers.registerComponentView(ParallelAxisView);
-  axisModelCreator(registers, 'parallel', ParallelAxisModel, defaultAxisOption);
-  installParallelActions(registers);
-}
+import { __extends } from "tslib";
+import Axis from '../../coord/Axis.js';
+/**
+ * Extend axis 2d
+ */
+var TimelineAxis = /** @class */function (_super) {
+  __extends(TimelineAxis, _super);
+  function TimelineAxis(dim, scale, coordExtent, axisType) {
+    var _this = _super.call(this, dim, scale, coordExtent) || this;
+    _this.type = axisType || 'value';
+    return _this;
+  }
+  /**
+   * @override
+   */
+  TimelineAxis.prototype.getLabelModel = function () {
+    // Force override
+    return this.model.getModel('label');
+  };
+  /**
+   * @override
+   */
+  TimelineAxis.prototype.isHorizontal = function () {
+    return this.model.get('orient') === 'horizontal';
+  };
+  return TimelineAxis;
+}(Axis);
+export default TimelineAxis;

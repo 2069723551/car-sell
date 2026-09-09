@@ -42,179 +42,95 @@
 * under the License.
 */
 import { __extends } from "tslib";
-import * as graphic from '../../util/graphic.js';
-import { setStatesStylesFromModel, toggleHoverEmphasis } from '../../util/states.js';
-import ChartView from '../../view/Chart.js';
-import { numericToNumber } from '../../util/number.js';
-import { eqNaN } from 'zrender/lib/core/util.js';
-import { saveOldStyle } from '../../animation/basicTransition.js';
-var DEFAULT_SMOOTH = 0.3;
+import ComponentView from '../../view/Component.js';
+import { each, bind, extend } from 'zrender/lib/core/util.js';
+import { createOrUpdate, clear } from '../../util/throttle.js';
+var CLICK_THRESHOLD = 5; // > 4
 var ParallelView = /** @class */function (_super) {
   __extends(ParallelView, _super);
   function ParallelView() {
     var _this = _super !== null && _super.apply(this, arguments) || this;
     _this.type = ParallelView.type;
-    _this._dataGroup = new graphic.Group();
-    _this._initialized = false;
     return _this;
   }
-  ParallelView.prototype.init = function () {
-    this.group.add(this._dataGroup);
+  ParallelView.prototype.render = function (parallelModel, ecModel, api) {
+    this._model = parallelModel;
+    this._api = api;
+    if (!this._handlers) {
+      this._handlers = {};
+      each(handlers, function (handler, eventName) {
+        api.getZr().on(eventName, this._handlers[eventName] = bind(handler, this));
+      }, this);
+    }
+    createOrUpdate(this, '_throttledDispatchExpand', parallelModel.get('axisExpandRate'), 'fixRate');
+  };
+  ParallelView.prototype.dispose = function (ecModel, api) {
+    clear(this, '_throttledDispatchExpand');
+    each(this._handlers, function (handler, eventName) {
+      api.getZr().off(eventName, handler);
+    });
+    this._handlers = null;
   };
   /**
-   * @override
+   * @internal
+   * @param {Object} [opt] If null, cancel the last action triggering for debounce.
    */
-  ParallelView.prototype.render = function (seriesModel, ecModel, api, payload) {
-    // Clear previously rendered progressive elements.
-    this._progressiveEls = null;
-    var dataGroup = this._dataGroup;
-    var data = seriesModel.getData();
-    var oldData = this._data;
-    var coordSys = seriesModel.coordinateSystem;
-    var dimensions = coordSys.dimensions;
-    var seriesScope = makeSeriesScope(seriesModel);
-    data.diff(oldData).add(add).update(update).remove(remove).execute();
-    function add(newDataIndex) {
-      var line = addEl(data, dataGroup, newDataIndex, dimensions, coordSys);
-      updateElCommon(line, data, newDataIndex, seriesScope);
-    }
-    function update(newDataIndex, oldDataIndex) {
-      var line = oldData.getItemGraphicEl(oldDataIndex);
-      var points = createLinePoints(data, newDataIndex, dimensions, coordSys);
-      data.setItemGraphicEl(newDataIndex, line);
-      graphic.updateProps(line, {
-        shape: {
-          points: points
-        }
-      }, seriesModel, newDataIndex);
-      saveOldStyle(line);
-      updateElCommon(line, data, newDataIndex, seriesScope);
-    }
-    function remove(oldDataIndex) {
-      var line = oldData.getItemGraphicEl(oldDataIndex);
-      dataGroup.remove(line);
-    }
-    // First create
-    if (!this._initialized) {
-      this._initialized = true;
-      var clipPath = createGridClipShape(coordSys, seriesModel, function () {
-        // Callback will be invoked immediately if there is no animation
-        setTimeout(function () {
-          dataGroup.removeClipPath();
-        });
-      });
-      dataGroup.setClipPath(clipPath);
-    }
-    this._data = data;
+  ParallelView.prototype._throttledDispatchExpand = function (opt) {
+    this._dispatchExpand(opt);
   };
-  ParallelView.prototype.incrementalPrepareRender = function (seriesModel, ecModel, api) {
-    this._initialized = true;
-    this._data = null;
-    this._dataGroup.removeAll();
-  };
-  ParallelView.prototype.incrementalRender = function (taskParams, seriesModel, ecModel) {
-    var data = seriesModel.getData();
-    var coordSys = seriesModel.coordinateSystem;
-    var dimensions = coordSys.dimensions;
-    var seriesScope = makeSeriesScope(seriesModel);
-    var progressiveEls = this._progressiveEls = [];
-    for (var dataIndex = taskParams.start; dataIndex < taskParams.end; dataIndex++) {
-      var line = addEl(data, this._dataGroup, dataIndex, dimensions, coordSys);
-      line.incremental = true;
-      updateElCommon(line, data, dataIndex, seriesScope);
-      progressiveEls.push(line);
-    }
-  };
-  ParallelView.prototype.remove = function () {
-    this._dataGroup && this._dataGroup.removeAll();
-    this._data = null;
+  /**
+   * @internal
+   */
+  ParallelView.prototype._dispatchExpand = function (opt) {
+    opt && this._api.dispatchAction(extend({
+      type: 'parallelAxisExpand'
+    }, opt));
   };
   ParallelView.type = 'parallel';
   return ParallelView;
-}(ChartView);
-function createGridClipShape(coordSys, seriesModel, cb) {
-  var parallelModel = coordSys.model;
-  var rect = coordSys.getRect();
-  var rectEl = new graphic.Rect({
-    shape: {
-      x: rect.x,
-      y: rect.y,
-      width: rect.width,
-      height: rect.height
+}(ComponentView);
+var handlers = {
+  mousedown: function (e) {
+    if (checkTrigger(this, 'click')) {
+      this._mouseDownPoint = [e.offsetX, e.offsetY];
     }
-  });
-  var dim = parallelModel.get('layout') === 'horizontal' ? 'width' : 'height';
-  rectEl.setShape(dim, 0);
-  graphic.initProps(rectEl, {
-    shape: {
-      width: rect.width,
-      height: rect.height
+  },
+  mouseup: function (e) {
+    var mouseDownPoint = this._mouseDownPoint;
+    if (checkTrigger(this, 'click') && mouseDownPoint) {
+      var point = [e.offsetX, e.offsetY];
+      var dist = Math.pow(mouseDownPoint[0] - point[0], 2) + Math.pow(mouseDownPoint[1] - point[1], 2);
+      if (dist > CLICK_THRESHOLD) {
+        return;
+      }
+      var result = this._model.coordinateSystem.getSlidedAxisExpandWindow([e.offsetX, e.offsetY]);
+      result.behavior !== 'none' && this._dispatchExpand({
+        axisExpandWindow: result.axisExpandWindow
+      });
     }
-  }, seriesModel, cb);
-  return rectEl;
-}
-function createLinePoints(data, dataIndex, dimensions, coordSys) {
-  var points = [];
-  for (var i = 0; i < dimensions.length; i++) {
-    var dimName = dimensions[i];
-    var value = data.get(data.mapDimension(dimName), dataIndex);
-    if (!isEmptyValue(value, coordSys.getAxis(dimName).type)) {
-      points.push(coordSys.dataToPoint(value, dimName));
+    this._mouseDownPoint = null;
+  },
+  mousemove: function (e) {
+    // Should do nothing when brushing.
+    if (this._mouseDownPoint || !checkTrigger(this, 'mousemove')) {
+      return;
     }
+    var model = this._model;
+    var result = model.coordinateSystem.getSlidedAxisExpandWindow([e.offsetX, e.offsetY]);
+    var behavior = result.behavior;
+    behavior === 'jump' && this._throttledDispatchExpand.debounceNextCall(model.get('axisExpandDebounce'));
+    this._throttledDispatchExpand(behavior === 'none' ? null // Cancel the last trigger, in case that mouse slide out of the area quickly.
+    : {
+      axisExpandWindow: result.axisExpandWindow,
+      // Jumping uses animation, and sliding suppresses animation.
+      animation: behavior === 'jump' ? null : {
+        duration: 0 // Disable animation.
+      }
+    });
   }
-  return points;
-}
-function addEl(data, dataGroup, dataIndex, dimensions, coordSys) {
-  var points = createLinePoints(data, dataIndex, dimensions, coordSys);
-  var line = new graphic.Polyline({
-    shape: {
-      points: points
-    },
-    // silent: true,
-    z2: 10
-  });
-  dataGroup.add(line);
-  data.setItemGraphicEl(dataIndex, line);
-  return line;
-}
-function makeSeriesScope(seriesModel) {
-  var smooth = seriesModel.get('smooth', true);
-  smooth === true && (smooth = DEFAULT_SMOOTH);
-  smooth = numericToNumber(smooth);
-  eqNaN(smooth) && (smooth = 0);
-  return {
-    smooth: smooth
-  };
-}
-function updateElCommon(el, data, dataIndex, seriesScope) {
-  el.useStyle(data.getItemVisual(dataIndex, 'style'));
-  el.style.fill = null;
-  el.setShape('smooth', seriesScope.smooth);
-  var itemModel = data.getItemModel(dataIndex);
-  var emphasisModel = itemModel.getModel('emphasis');
-  setStatesStylesFromModel(el, itemModel, 'lineStyle');
-  toggleHoverEmphasis(el, emphasisModel.get('focus'), emphasisModel.get('blurScope'), emphasisModel.get('disabled'));
-}
-// function simpleDiff(oldData, newData, dimensions) {
-//     let oldLen;
-//     if (!oldData
-//         || !oldData.__plProgressive
-//         || (oldLen = oldData.count()) !== newData.count()
-//     ) {
-//         return true;
-//     }
-//     let dimLen = dimensions.length;
-//     for (let i = 0; i < oldLen; i++) {
-//         for (let j = 0; j < dimLen; j++) {
-//             if (oldData.get(dimensions[j], i) !== newData.get(dimensions[j], i)) {
-//                 return true;
-//             }
-//         }
-//     }
-//     return false;
-// }
-// FIXME put in common util?
-function isEmptyValue(val, axisType) {
-  return axisType === 'category' ? val == null : val == null || isNaN(val); // axisType === 'value'
+};
+function checkTrigger(view, triggerOn) {
+  var model = view._model;
+  return model.get('axisExpandable') && model.get('axisExpandTriggerOn') === triggerOn;
 }
 export default ParallelView;

@@ -41,18 +41,23 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import { use } from '../../extension.js';
-import radarLayout from '../radar/radarLayout.js';
-import dataFilter from '../../processor/dataFilter.js';
-import backwardCompat from '../radar/backwardCompat.js';
+import RadarModel from '../../coord/radar/RadarModel.js';
 import RadarView from './RadarView.js';
-import RadarSeriesModel from './RadarSeries.js';
-import { install as installRadarComponent } from '../../component/radar/install.js';
+import Radar from '../../coord/radar/Radar.js';
 export function install(registers) {
-  use(installRadarComponent);
-  registers.registerChartView(RadarView);
-  registers.registerSeriesModel(RadarSeriesModel);
-  registers.registerLayout(radarLayout);
-  registers.registerProcessor(dataFilter('radar'));
-  registers.registerPreprocessor(backwardCompat);
+  registers.registerCoordinateSystem('radar', Radar);
+  registers.registerComponentModel(RadarModel);
+  registers.registerComponentView(RadarView);
+  registers.registerVisual({
+    seriesType: 'radar',
+    reset: function (seriesModel) {
+      var data = seriesModel.getData();
+      // itemVisual symbol is for selected data
+      data.each(function (idx) {
+        data.setItemVisual(idx, 'legendIcon', 'roundRect');
+      });
+      // visual is for unselected data
+      data.setVisual('legendIcon', 'roundRect');
+    }
+  });
 }

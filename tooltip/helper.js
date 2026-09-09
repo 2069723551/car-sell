@@ -41,33 +41,38 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import parallelPreprocessor from '../../coord/parallel/parallelPreprocessor.js';
-import ParallelView from './ParallelView.js';
-import ParallelModel from '../../coord/parallel/ParallelModel.js';
-import parallelCoordSysCreator from '../../coord/parallel/parallelCreator.js';
-import axisModelCreator from '../../coord/axisModelCreator.js';
-import ParallelAxisModel from '../../coord/parallel/AxisModel.js';
-import ParallelAxisView from '../axis/ParallelAxisView.js';
-import { installParallelActions } from '../axis/parallelAxisAction.js';
-var defaultAxisOption = {
-  type: 'value',
-  areaSelectStyle: {
-    width: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(160,197,232)',
-    color: 'rgba(160,197,232)',
-    opacity: 0.3
-  },
-  realtime: true,
-  z: 10
-};
-export function install(registers) {
-  registers.registerComponentView(ParallelView);
-  registers.registerComponentModel(ParallelModel);
-  registers.registerCoordinateSystem('parallel', parallelCoordSysCreator);
-  registers.registerPreprocessor(parallelPreprocessor);
-  registers.registerComponentModel(ParallelAxisModel);
-  registers.registerComponentView(ParallelAxisView);
-  axisModelCreator(registers, 'parallel', ParallelAxisModel, defaultAxisOption);
-  installParallelActions(registers);
+import { toCamelCase } from '../../util/format.js';
+import env from 'zrender/lib/core/env.js';
+/* global document */
+export function shouldTooltipConfine(tooltipModel) {
+  var confineOption = tooltipModel.get('confine');
+  return confineOption != null ? !!confineOption
+  // In richText mode, the outside part can not be visible.
+  : tooltipModel.get('renderMode') === 'richText';
+}
+function testStyle(styleProps) {
+  if (!env.domSupported) {
+    return;
+  }
+  var style = document.documentElement.style;
+  for (var i = 0, len = styleProps.length; i < len; i++) {
+    if (styleProps[i] in style) {
+      return styleProps[i];
+    }
+  }
+}
+export var TRANSFORM_VENDOR = testStyle(['transform', 'webkitTransform', 'OTransform', 'MozTransform', 'msTransform']);
+export var TRANSITION_VENDOR = testStyle(['webkitTransition', 'transition', 'OTransition', 'MozTransition', 'msTransition']);
+export function toCSSVendorPrefix(styleVendor, styleProp) {
+  if (!styleVendor) {
+    return styleProp;
+  }
+  styleProp = toCamelCase(styleProp, true);
+  var idx = styleVendor.indexOf(styleProp);
+  styleVendor = idx === -1 ? styleProp : "-" + styleVendor.slice(0, idx) + "-" + styleProp;
+  return styleVendor.toLowerCase();
+}
+export function getComputedStyle(el, style) {
+  var stl = el.currentStyle || document.defaultView && document.defaultView.getComputedStyle(el);
+  return stl ? style ? stl[style] : stl : null;
 }

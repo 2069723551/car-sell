@@ -42,14 +42,11 @@
 * under the License.
 */
 import { __extends } from "tslib";
-import * as graphic from '../../util/graphic.js';
-import { setStatesStylesFromModel, toggleHoverEmphasis } from '../../util/states.js';
 import * as zrUtil from 'zrender/lib/core/util.js';
-import * as symbolUtil from '../../util/symbol.js';
-import ChartView from '../../view/Chart.js';
-import { setLabelStyle, getLabelStatesModels } from '../../label/labelStyle.js';
-import ZRImage from 'zrender/lib/graphic/Image.js';
-import { saveOldStyle } from '../../animation/basicTransition.js';
+import AxisBuilder from '../axis/AxisBuilder.js';
+import * as graphic from '../../util/graphic.js';
+import ComponentView from '../../view/Component.js';
+var axisBuilderAttrs = ['axisLine', 'axisTickLabel', 'axisName'];
 var RadarView = /** @class */function (_super) {
   __extends(RadarView, _super);
   function RadarView() {
@@ -57,169 +54,150 @@ var RadarView = /** @class */function (_super) {
     _this.type = RadarView.type;
     return _this;
   }
-  RadarView.prototype.render = function (seriesModel, ecModel, api) {
-    var polar = seriesModel.coordinateSystem;
+  RadarView.prototype.render = function (radarModel, ecModel, api) {
     var group = this.group;
-    var data = seriesModel.getData();
-    var oldData = this._data;
-    function createSymbol(data, idx) {
-      var symbolType = data.getItemVisual(idx, 'symbol') || 'circle';
-      if (symbolType === 'none') {
-        return;
-      }
-      var symbolSize = symbolUtil.normalizeSymbolSize(data.getItemVisual(idx, 'symbolSize'));
-      var symbolPath = symbolUtil.createSymbol(symbolType, -1, -1, 2, 2);
-      var symbolRotate = data.getItemVisual(idx, 'symbolRotate') || 0;
-      symbolPath.attr({
-        style: {
-          strokeNoScale: true
-        },
-        z2: 100,
-        scaleX: symbolSize[0] / 2,
-        scaleY: symbolSize[1] / 2,
-        rotation: symbolRotate * Math.PI / 180 || 0
+    group.removeAll();
+    this._buildAxes(radarModel);
+    this._buildSplitLineAndArea(radarModel);
+  };
+  RadarView.prototype._buildAxes = function (radarModel) {
+    var radar = radarModel.coordinateSystem;
+    var indicatorAxes = radar.getIndicatorAxes();
+    var axisBuilders = zrUtil.map(indicatorAxes, function (indicatorAxis) {
+      var axisName = indicatorAxis.model.get('showName') ? indicatorAxis.name : ''; // hide name
+      var axisBuilder = new AxisBuilder(indicatorAxis.model, {
+        axisName: axisName,
+        position: [radar.cx, radar.cy],
+        rotation: indicatorAxis.angle,
+        labelDirection: -1,
+        tickDirection: -1,
+        nameDirection: 1
       });
-      return symbolPath;
+      return axisBuilder;
+    });
+    zrUtil.each(axisBuilders, function (axisBuilder) {
+      zrUtil.each(axisBuilderAttrs, axisBuilder.add, axisBuilder);
+      this.group.add(axisBuilder.getGroup());
+    }, this);
+  };
+  RadarView.prototype._buildSplitLineAndArea = function (radarModel) {
+    var radar = radarModel.coordinateSystem;
+    var indicatorAxes = radar.getIndicatorAxes();
+    if (!indicatorAxes.length) {
+      return;
     }
-    function updateSymbols(oldPoints, newPoints, symbolGroup, data, idx, isInit) {
-      // Simply rerender all
-      symbolGroup.removeAll();
-      for (var i = 0; i < newPoints.length - 1; i++) {
-        var symbolPath = createSymbol(data, idx);
-        if (symbolPath) {
-          symbolPath.__dimIdx = i;
-          if (oldPoints[i]) {
-            symbolPath.setPosition(oldPoints[i]);
-            graphic[isInit ? 'initProps' : 'updateProps'](symbolPath, {
-              x: newPoints[i][0],
-              y: newPoints[i][1]
-            }, seriesModel, idx);
-          } else {
-            symbolPath.setPosition(newPoints[i]);
-          }
-          symbolGroup.add(symbolPath);
+    var shape = radarModel.get('shape');
+    var splitLineModel = radarModel.getModel('splitLine');
+    var splitAreaModel = radarModel.getModel('splitArea');
+    var lineStyleModel = splitLineModel.getModel('lineStyle');
+    var areaStyleModel = splitAreaModel.getModel('areaStyle');
+    var showSplitLine = splitLineModel.get('show');
+    var showSplitArea = splitAreaModel.get('show');
+    var splitLineColors = lineStyleModel.get('color');
+    var splitAreaColors = areaStyleModel.get('color');
+    var splitLineColorsArr = zrUtil.isArray(splitLineColors) ? splitLineColors : [splitLineColors];
+    var splitAreaColorsArr = zrUtil.isArray(splitAreaColors) ? splitAreaColors : [splitAreaColors];
+    var splitLines = [];
+    var splitAreas = [];
+    function getColorIndex(areaOrLine, areaOrLineColorList, idx) {
+      var colorIndex = idx % areaOrLineColorList.length;
+      areaOrLine[colorIndex] = areaOrLine[colorIndex] || [];
+      return colorIndex;
+    }
+    if (shape === 'circle') {
+      var ticksRadius = indicatorAxes[0].getTicksCoords();
+      var cx = radar.cx;
+      var cy = radar.cy;
+      for (var i = 0; i < ticksRadius.length; i++) {
+        if (showSplitLine) {
+          var colorIndex = getColorIndex(splitLines, splitLineColorsArr, i);
+          splitLines[colorIndex].push(new graphic.Circle({
+            shape: {
+              cx: cx,
+              cy: cy,
+              r: ticksRadius[i].coord
+            }
+          }));
+        }
+        if (showSplitArea && i < ticksRadius.length - 1) {
+          var colorIndex = getColorIndex(splitAreas, splitAreaColorsArr, i);
+          splitAreas[colorIndex].push(new graphic.Ring({
+            shape: {
+              cx: cx,
+              cy: cy,
+              r0: ticksRadius[i].coord,
+              r: ticksRadius[i + 1].coord
+            }
+          }));
         }
       }
     }
-    function getInitialPoints(points) {
-      return zrUtil.map(points, function (pt) {
-        return [polar.cx, polar.cy];
-      });
-    }
-    data.diff(oldData).add(function (idx) {
-      var points = data.getItemLayout(idx);
-      if (!points) {
-        return;
-      }
-      var polygon = new graphic.Polygon();
-      var polyline = new graphic.Polyline();
-      var target = {
-        shape: {
-          points: points
-        }
-      };
-      polygon.shape.points = getInitialPoints(points);
-      polyline.shape.points = getInitialPoints(points);
-      graphic.initProps(polygon, target, seriesModel, idx);
-      graphic.initProps(polyline, target, seriesModel, idx);
-      var itemGroup = new graphic.Group();
-      var symbolGroup = new graphic.Group();
-      itemGroup.add(polyline);
-      itemGroup.add(polygon);
-      itemGroup.add(symbolGroup);
-      updateSymbols(polyline.shape.points, points, symbolGroup, data, idx, true);
-      data.setItemGraphicEl(idx, itemGroup);
-    }).update(function (newIdx, oldIdx) {
-      var itemGroup = oldData.getItemGraphicEl(oldIdx);
-      var polyline = itemGroup.childAt(0);
-      var polygon = itemGroup.childAt(1);
-      var symbolGroup = itemGroup.childAt(2);
-      var target = {
-        shape: {
-          points: data.getItemLayout(newIdx)
-        }
-      };
-      if (!target.shape.points) {
-        return;
-      }
-      updateSymbols(polyline.shape.points, target.shape.points, symbolGroup, data, newIdx, false);
-      saveOldStyle(polygon);
-      saveOldStyle(polyline);
-      graphic.updateProps(polyline, target, seriesModel);
-      graphic.updateProps(polygon, target, seriesModel);
-      data.setItemGraphicEl(newIdx, itemGroup);
-    }).remove(function (idx) {
-      group.remove(oldData.getItemGraphicEl(idx));
-    }).execute();
-    data.eachItemGraphicEl(function (itemGroup, idx) {
-      var itemModel = data.getItemModel(idx);
-      var polyline = itemGroup.childAt(0);
-      var polygon = itemGroup.childAt(1);
-      var symbolGroup = itemGroup.childAt(2);
-      // Radar uses the visual encoded from itemStyle.
-      var itemStyle = data.getItemVisual(idx, 'style');
-      var color = itemStyle.fill;
-      group.add(itemGroup);
-      polyline.useStyle(zrUtil.defaults(itemModel.getModel('lineStyle').getLineStyle(), {
-        fill: 'none',
-        stroke: color
-      }));
-      setStatesStylesFromModel(polyline, itemModel, 'lineStyle');
-      setStatesStylesFromModel(polygon, itemModel, 'areaStyle');
-      var areaStyleModel = itemModel.getModel('areaStyle');
-      var polygonIgnore = areaStyleModel.isEmpty() && areaStyleModel.parentModel.isEmpty();
-      polygon.ignore = polygonIgnore;
-      zrUtil.each(['emphasis', 'select', 'blur'], function (stateName) {
-        var stateModel = itemModel.getModel([stateName, 'areaStyle']);
-        var stateIgnore = stateModel.isEmpty() && stateModel.parentModel.isEmpty();
-        // Won't be ignore if normal state is not ignore.
-        polygon.ensureState(stateName).ignore = stateIgnore && polygonIgnore;
-      });
-      polygon.useStyle(zrUtil.defaults(areaStyleModel.getAreaStyle(), {
-        fill: color,
-        opacity: 0.7,
-        decal: itemStyle.decal
-      }));
-      var emphasisModel = itemModel.getModel('emphasis');
-      var itemHoverStyle = emphasisModel.getModel('itemStyle').getItemStyle();
-      symbolGroup.eachChild(function (symbolPath) {
-        if (symbolPath instanceof ZRImage) {
-          var pathStyle = symbolPath.style;
-          symbolPath.useStyle(zrUtil.extend({
-            // TODO other properties like x, y ?
-            image: pathStyle.image,
-            x: pathStyle.x,
-            y: pathStyle.y,
-            width: pathStyle.width,
-            height: pathStyle.height
-          }, itemStyle));
-        } else {
-          symbolPath.useStyle(itemStyle);
-          symbolPath.setColor(color);
-          symbolPath.style.strokeNoScale = true;
-        }
-        var pathEmphasisState = symbolPath.ensureState('emphasis');
-        pathEmphasisState.style = zrUtil.clone(itemHoverStyle);
-        var defaultText = data.getStore().get(data.getDimensionIndex(symbolPath.__dimIdx), idx);
-        (defaultText == null || isNaN(defaultText)) && (defaultText = '');
-        setLabelStyle(symbolPath, getLabelStatesModels(itemModel), {
-          labelFetcher: data.hostModel,
-          labelDataIndex: idx,
-          labelDimIndex: symbolPath.__dimIdx,
-          defaultText: defaultText,
-          inheritColor: color,
-          defaultOpacity: itemStyle.opacity
+    // Polyyon
+    else {
+      var realSplitNumber_1;
+      var axesTicksPoints = zrUtil.map(indicatorAxes, function (indicatorAxis, idx) {
+        var ticksCoords = indicatorAxis.getTicksCoords();
+        realSplitNumber_1 = realSplitNumber_1 == null ? ticksCoords.length - 1 : Math.min(ticksCoords.length - 1, realSplitNumber_1);
+        return zrUtil.map(ticksCoords, function (tickCoord) {
+          return radar.coordToPoint(tickCoord.coord, idx);
         });
       });
-      toggleHoverEmphasis(itemGroup, emphasisModel.get('focus'), emphasisModel.get('blurScope'), emphasisModel.get('disabled'));
-    });
-    this._data = data;
-  };
-  RadarView.prototype.remove = function () {
-    this.group.removeAll();
-    this._data = null;
+      var prevPoints = [];
+      for (var i = 0; i <= realSplitNumber_1; i++) {
+        var points = [];
+        for (var j = 0; j < indicatorAxes.length; j++) {
+          points.push(axesTicksPoints[j][i]);
+        }
+        // Close
+        if (points[0]) {
+          points.push(points[0].slice());
+        } else {
+          if (process.env.NODE_ENV !== 'production') {
+            console.error('Can\'t draw value axis ' + i);
+          }
+        }
+        if (showSplitLine) {
+          var colorIndex = getColorIndex(splitLines, splitLineColorsArr, i);
+          splitLines[colorIndex].push(new graphic.Polyline({
+            shape: {
+              points: points
+            }
+          }));
+        }
+        if (showSplitArea && prevPoints) {
+          var colorIndex = getColorIndex(splitAreas, splitAreaColorsArr, i - 1);
+          splitAreas[colorIndex].push(new graphic.Polygon({
+            shape: {
+              points: points.concat(prevPoints)
+            }
+          }));
+        }
+        prevPoints = points.slice().reverse();
+      }
+    }
+    var lineStyle = lineStyleModel.getLineStyle();
+    var areaStyle = areaStyleModel.getAreaStyle();
+    // Add splitArea before splitLine
+    zrUtil.each(splitAreas, function (splitAreas, idx) {
+      this.group.add(graphic.mergePath(splitAreas, {
+        style: zrUtil.defaults({
+          stroke: 'none',
+          fill: splitAreaColorsArr[idx % splitAreaColorsArr.length]
+        }, areaStyle),
+        silent: true
+      }));
+    }, this);
+    zrUtil.each(splitLines, function (splitLines, idx) {
+      this.group.add(graphic.mergePath(splitLines, {
+        style: zrUtil.defaults({
+          fill: 'none',
+          stroke: splitLineColorsArr[idx % splitLineColorsArr.length]
+        }, lineStyle),
+        silent: true
+      }));
+    }, this);
   };
   RadarView.type = 'radar';
   return RadarView;
-}(ChartView);
+}(ComponentView);
 export default RadarView;

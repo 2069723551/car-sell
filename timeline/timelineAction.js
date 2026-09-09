@@ -41,33 +41,42 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import parallelPreprocessor from '../../coord/parallel/parallelPreprocessor.js';
-import ParallelView from './ParallelView.js';
-import ParallelModel from '../../coord/parallel/ParallelModel.js';
-import parallelCoordSysCreator from '../../coord/parallel/parallelCreator.js';
-import axisModelCreator from '../../coord/axisModelCreator.js';
-import ParallelAxisModel from '../../coord/parallel/AxisModel.js';
-import ParallelAxisView from '../axis/ParallelAxisView.js';
-import { installParallelActions } from '../axis/parallelAxisAction.js';
-var defaultAxisOption = {
-  type: 'value',
-  areaSelectStyle: {
-    width: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(160,197,232)',
-    color: 'rgba(160,197,232)',
-    opacity: 0.3
-  },
-  realtime: true,
-  z: 10
-};
-export function install(registers) {
-  registers.registerComponentView(ParallelView);
-  registers.registerComponentModel(ParallelModel);
-  registers.registerCoordinateSystem('parallel', parallelCoordSysCreator);
-  registers.registerPreprocessor(parallelPreprocessor);
-  registers.registerComponentModel(ParallelAxisModel);
-  registers.registerComponentView(ParallelAxisView);
-  axisModelCreator(registers, 'parallel', ParallelAxisModel, defaultAxisOption);
-  installParallelActions(registers);
+import { defaults } from 'zrender/lib/core/util.js';
+export function installTimelineAction(registers) {
+  registers.registerAction({
+    type: 'timelineChange',
+    event: 'timelineChanged',
+    update: 'prepareAndUpdate'
+  }, function (payload, ecModel, api) {
+    var timelineModel = ecModel.getComponent('timeline');
+    if (timelineModel && payload.currentIndex != null) {
+      timelineModel.setCurrentIndex(payload.currentIndex);
+      if (!timelineModel.get('loop', true) && timelineModel.isIndexMax() && timelineModel.getPlayState()) {
+        timelineModel.setPlayState(false);
+        // The timeline has played to the end, trigger event
+        api.dispatchAction({
+          type: 'timelinePlayChange',
+          playState: false,
+          from: payload.from
+        });
+      }
+    }
+    // Set normalized currentIndex to payload.
+    ecModel.resetOption('timeline', {
+      replaceMerge: timelineModel.get('replaceMerge', true)
+    });
+    return defaults({
+      currentIndex: timelineModel.option.currentIndex
+    }, payload);
+  });
+  registers.registerAction({
+    type: 'timelinePlayChange',
+    event: 'timelinePlayChanged',
+    update: 'update'
+  }, function (payload, ecModel) {
+    var timelineModel = ecModel.getComponent('timeline');
+    if (timelineModel && payload.playState != null) {
+      timelineModel.setPlayState(payload.playState);
+    }
+  });
 }

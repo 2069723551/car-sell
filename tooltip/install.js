@@ -41,33 +41,31 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import parallelPreprocessor from '../../coord/parallel/parallelPreprocessor.js';
-import ParallelView from './ParallelView.js';
-import ParallelModel from '../../coord/parallel/ParallelModel.js';
-import parallelCoordSysCreator from '../../coord/parallel/parallelCreator.js';
-import axisModelCreator from '../../coord/axisModelCreator.js';
-import ParallelAxisModel from '../../coord/parallel/AxisModel.js';
-import ParallelAxisView from '../axis/ParallelAxisView.js';
-import { installParallelActions } from '../axis/parallelAxisAction.js';
-var defaultAxisOption = {
-  type: 'value',
-  areaSelectStyle: {
-    width: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(160,197,232)',
-    color: 'rgba(160,197,232)',
-    opacity: 0.3
-  },
-  realtime: true,
-  z: 10
-};
+import { install as installAxisPointer } from '../axisPointer/install.js';
+import { use } from '../../extension.js';
+import TooltipModel from './TooltipModel.js';
+import TooltipView from './TooltipView.js';
+import { noop } from 'zrender/lib/core/util.js';
 export function install(registers) {
-  registers.registerComponentView(ParallelView);
-  registers.registerComponentModel(ParallelModel);
-  registers.registerCoordinateSystem('parallel', parallelCoordSysCreator);
-  registers.registerPreprocessor(parallelPreprocessor);
-  registers.registerComponentModel(ParallelAxisModel);
-  registers.registerComponentView(ParallelAxisView);
-  axisModelCreator(registers, 'parallel', ParallelAxisModel, defaultAxisOption);
-  installParallelActions(registers);
+  use(installAxisPointer);
+  registers.registerComponentModel(TooltipModel);
+  registers.registerComponentView(TooltipView);
+  /**
+   * @action
+   * @property {string} type
+   * @property {number} seriesIndex
+   * @property {number} dataIndex
+   * @property {number} [x]
+   * @property {number} [y]
+   */
+  registers.registerAction({
+    type: 'showTip',
+    event: 'showTip',
+    update: 'tooltip:manuallyShowTip'
+  }, noop);
+  registers.registerAction({
+    type: 'hideTip',
+    event: 'hideTip',
+    update: 'tooltip:manuallyHideTip'
+  }, noop);
 }

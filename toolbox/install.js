@@ -41,33 +41,24 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import parallelPreprocessor from '../../coord/parallel/parallelPreprocessor.js';
-import ParallelView from './ParallelView.js';
-import ParallelModel from '../../coord/parallel/ParallelModel.js';
-import parallelCoordSysCreator from '../../coord/parallel/parallelCreator.js';
-import axisModelCreator from '../../coord/axisModelCreator.js';
-import ParallelAxisModel from '../../coord/parallel/AxisModel.js';
-import ParallelAxisView from '../axis/ParallelAxisView.js';
-import { installParallelActions } from '../axis/parallelAxisAction.js';
-var defaultAxisOption = {
-  type: 'value',
-  areaSelectStyle: {
-    width: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(160,197,232)',
-    color: 'rgba(160,197,232)',
-    opacity: 0.3
-  },
-  realtime: true,
-  z: 10
-};
+import { use } from '../../extension.js';
+import { install as installDataZoomSelect } from '../../component/dataZoom/installDataZoomSelect.js';
+import ToolboxModel from './ToolboxModel.js';
+import ToolboxView from './ToolboxView.js';
+// TODOD: REGISTER IN INSTALL
+import { registerFeature } from './featureManager.js';
+import SaveAsImage from './feature/SaveAsImage.js';
+import MagicType from './feature/MagicType.js';
+import DataView from './feature/DataView.js';
+import Restore from './feature/Restore.js';
+import DataZoom from './feature/DataZoom.js';
 export function install(registers) {
-  registers.registerComponentView(ParallelView);
-  registers.registerComponentModel(ParallelModel);
-  registers.registerCoordinateSystem('parallel', parallelCoordSysCreator);
-  registers.registerPreprocessor(parallelPreprocessor);
-  registers.registerComponentModel(ParallelAxisModel);
-  registers.registerComponentView(ParallelAxisView);
-  axisModelCreator(registers, 'parallel', ParallelAxisModel, defaultAxisOption);
-  installParallelActions(registers);
+  registers.registerComponentModel(ToolboxModel);
+  registers.registerComponentView(ToolboxView);
+  registerFeature('saveAsImage', SaveAsImage);
+  registerFeature('magicType', MagicType);
+  registerFeature('dataView', DataView);
+  registerFeature('dataZoom', DataZoom);
+  registerFeature('restore', Restore);
+  use(installDataZoomSelect);
 }

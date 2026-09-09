@@ -41,33 +41,33 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import parallelPreprocessor from '../../coord/parallel/parallelPreprocessor.js';
-import ParallelView from './ParallelView.js';
-import ParallelModel from '../../coord/parallel/ParallelModel.js';
-import parallelCoordSysCreator from '../../coord/parallel/parallelCreator.js';
+import { __extends } from "tslib";
+import { use } from '../../extension.js';
+import ComponentView from '../../view/Component.js';
+import SingleAxisView from '../axis/SingleAxisView.js';
 import axisModelCreator from '../../coord/axisModelCreator.js';
-import ParallelAxisModel from '../../coord/parallel/AxisModel.js';
-import ParallelAxisView from '../axis/ParallelAxisView.js';
-import { installParallelActions } from '../axis/parallelAxisAction.js';
-var defaultAxisOption = {
-  type: 'value',
-  areaSelectStyle: {
-    width: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(160,197,232)',
-    color: 'rgba(160,197,232)',
-    opacity: 0.3
-  },
-  realtime: true,
-  z: 10
-};
+import SingleAxisModel from '../../coord/single/AxisModel.js';
+import singleCreator from '../../coord/single/singleCreator.js';
+import { install as installAxisPointer } from '../axisPointer/install.js';
+import AxisView from '../axis/AxisView.js';
+import SingleAxisPointer from '../axisPointer/SingleAxisPointer.js';
+var SingleView = /** @class */function (_super) {
+  __extends(SingleView, _super);
+  function SingleView() {
+    var _this = _super !== null && _super.apply(this, arguments) || this;
+    _this.type = SingleView.type;
+    return _this;
+  }
+  SingleView.type = 'single';
+  return SingleView;
+}(ComponentView);
 export function install(registers) {
-  registers.registerComponentView(ParallelView);
-  registers.registerComponentModel(ParallelModel);
-  registers.registerCoordinateSystem('parallel', parallelCoordSysCreator);
-  registers.registerPreprocessor(parallelPreprocessor);
-  registers.registerComponentModel(ParallelAxisModel);
-  registers.registerComponentView(ParallelAxisView);
-  axisModelCreator(registers, 'parallel', ParallelAxisModel, defaultAxisOption);
-  installParallelActions(registers);
+  use(installAxisPointer);
+  AxisView.registerAxisPointerClass('SingleAxisPointer', SingleAxisPointer);
+  registers.registerComponentView(SingleView);
+  // Axis
+  registers.registerComponentView(SingleAxisView);
+  registers.registerComponentModel(SingleAxisModel);
+  axisModelCreator(registers, 'single', SingleAxisModel, SingleAxisModel.defaultOption);
+  registers.registerCoordinateSystem('single', singleCreator);
 }

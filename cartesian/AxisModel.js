@@ -41,33 +41,22 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-import parallelPreprocessor from '../../coord/parallel/parallelPreprocessor.js';
-import ParallelView from './ParallelView.js';
-import ParallelModel from '../../coord/parallel/ParallelModel.js';
-import parallelCoordSysCreator from '../../coord/parallel/parallelCreator.js';
-import axisModelCreator from '../../coord/axisModelCreator.js';
-import ParallelAxisModel from '../../coord/parallel/AxisModel.js';
-import ParallelAxisView from '../axis/ParallelAxisView.js';
-import { installParallelActions } from '../axis/parallelAxisAction.js';
-var defaultAxisOption = {
-  type: 'value',
-  areaSelectStyle: {
-    width: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(160,197,232)',
-    color: 'rgba(160,197,232)',
-    opacity: 0.3
-  },
-  realtime: true,
-  z: 10
-};
-export function install(registers) {
-  registers.registerComponentView(ParallelView);
-  registers.registerComponentModel(ParallelModel);
-  registers.registerCoordinateSystem('parallel', parallelCoordSysCreator);
-  registers.registerPreprocessor(parallelPreprocessor);
-  registers.registerComponentModel(ParallelAxisModel);
-  registers.registerComponentView(ParallelAxisView);
-  axisModelCreator(registers, 'parallel', ParallelAxisModel, defaultAxisOption);
-  installParallelActions(registers);
-}
+import { __extends } from "tslib";
+import * as zrUtil from 'zrender/lib/core/util.js';
+import ComponentModel from '../../model/Component.js';
+import { AxisModelCommonMixin } from '../axisModelCommonMixin.js';
+import { SINGLE_REFERRING } from '../../util/model.js';
+var CartesianAxisModel = /** @class */function (_super) {
+  __extends(CartesianAxisModel, _super);
+  function CartesianAxisModel() {
+    return _super !== null && _super.apply(this, arguments) || this;
+  }
+  CartesianAxisModel.prototype.getCoordSysModel = function () {
+    return this.getReferringComponents('grid', SINGLE_REFERRING).models[0];
+  };
+  CartesianAxisModel.type = 'cartesian2dAxis';
+  return CartesianAxisModel;
+}(ComponentModel);
+export { CartesianAxisModel };
+zrUtil.mixin(CartesianAxisModel, AxisModelCommonMixin);
+export default CartesianAxisModel;
